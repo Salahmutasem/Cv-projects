@@ -1,0 +1,447 @@
+
+----------------------------------------------------------------------------
+After editing
+                           making tables 
+1) 
+CREATE TABLE passenger (
+    passport_number char(9) PRIMARY KEY,
+    Fname VARCHAR(15) NOT NULL,
+    Lname VARCHAR(15) NOT NULL ,
+    gender CHAR(1) DEFAULT 'm' CHECK (gender IN ('f', 'm')),
+    nationality VARCHAR(25)  DEFAULT 'jordan',
+    passenger_type CHAR(1) DEFAULT 'D' CHECK (passenger_type IN ('D', 'A' )),
+    DOB DATE
+    ) ;
+		
+2) CREATE TABLE flight (
+    flight_id CHAR(9) PRIMARY KEY,
+    departure_city VARCHAR(20) NOT NULL DEFAULT 'Jordan',
+    arrival_city VARCHAR(20) NOT NULL,
+    departure_date DATETIME NOT NULL,
+    arrival_date DATETIME NOT NULL,
+    numberofpassenger INT,
+    type CHAR(1) DEFAULT 'D' CHECK (type IN ('D', 'A')),
+    IATA_code CHAR(9) NOT NULL
+);
+    
+3) CREATE TABLE boarding (
+    boarding_id CHAR(9) PRIMARY KEY,
+    flight_time DATETIME NOT NULL,
+    passport_number CHAR(9) NOT NULL,
+    flight_id char(9) NOT NULL,
+    boarding_staff VARCHAR(15),
+    baggage_weight DECIMAL(10, 2),
+    cost DECIMAL(10, 2),
+    IATA_code CHAR(9) NOT NULL 
+    ) ;
+4)  CREATE TABLE passenger_phone (
+    passport_number CHAR(9),
+    phone_number VARCHAR(15) NOT NULL,
+    PRIMARY KEY (passport_number, phone_number)
+);
+5) CREATE TABLE plane (
+    plane_id CHAR(9) PRIMARY KEY,
+    company VARCHAR(15),
+    model VARCHAR(15) NOT NULL,
+    capacity INT,
+    classes CHAR(1) DEFAULT 'A' CHECK (classes IN ('A', 'B')),
+    gate_number INT,
+    type VARCHAR(30),
+    IATA_code CHAR(9) NOT NULL
+);
+
+6) CREATE TABLE airline (
+    IATA_code CHAR(9) PRIMARY KEY,
+    flight_id INT NOT NULL,
+    Name VARCHAR(15) NOT NULL
+);
+
+7) CREATE TABLE airline_location (
+    IATA_code CHAR(9),
+    gate_number INT NOT NULL,
+    department VARCHAR(15),
+    PRIMARY KEY (IATA_code, gate_number, department)
+);
+8) CREATE TABLE airline_email(
+    IATA_code CHAR(9), 
+    email VARCHAR(25) UNIQUE,
+    PRIMARY KEY (IATA_code, email)
+);
+
+
+----------------------------------------------------------------------------
+
+           adding foriegn keys
+
+
+1)
+ALTER TABLE boarding
+ADD CONSTRAINT fk_boarding_IATA_code
+FOREIGN KEY (IATA_code)
+REFERENCES airline(IATA_code)
+ON UPDATE CASCADE
+ON DELETE CASCADE;
+
+2)
+ALTER TABLE boarding
+ADD CONSTRAINT fk_boarding_passport_number
+FOREIGN KEY (passport_number)
+REFERENCES passenger(passport_number)
+ON UPDATE CASCADE
+ON DELETE CASCADE;
+
+3)
+ALTER TABLE passenger_phone
+ADD CONSTRAINT fk_phone_passport_number
+FOREIGN KEY (passport_number)
+REFERENCES passenger(passport_number)
+ON UPDATE CASCADE
+ON DELETE CASCADE;
+
+4)
+ALTER TABLE plane
+ADD CONSTRAINT fk_plane_IATA_code
+FOREIGN KEY (IATA_code)
+REFERENCES airline(IATA_code)
+ON UPDATE CASCADE
+ON DELETE CASCADE;
+
+5)
+ALTER TABLE airline_location
+ADD CONSTRAINT fk_location_IATA_code
+FOREIGN KEY (IATA_code)
+REFERENCES airline(IATA_code)
+ON UPDATE CASCADE
+ON DELETE CASCADE;
+
+6)
+ALTER TABLE airline_email
+ADD CONSTRAINT fk_email_IATA_code
+FOREIGN KEY (IATA_code)
+REFERENCES airline(IATA_code)
+ON UPDATE CASCADE
+ON DELETE CASCADE;
+
+7) 
+ALTER TABLE boarding
+ADD CONSTRAINT fk_boarding_flight
+FOREIGN KEY (flight_id)
+REFERENCES flight (flight_id)
+ON UPDATE CASCADE
+ON DELETE CASCADE;
+
+8) 
+
+ALTER TABLE flight
+DROP FOREIGN KEY fk_flight_IATA_code;
+
+ALTER TABLE flight
+ADD CONSTRAINT fk_flight_IATA_code
+FOREIGN KEY (IATA_code)
+REFERENCES airline(IATA_code)
+ON UPDATE CASCADE
+ON DELETE CASCADE;
+---------------------------------------------------------------------------
+                                  making views
+ This view combines information from the "passenger" and "passenger_phone" tables to provide details about passengers and their phone numbers.
+1) CREATE VIEW PassengerInfo AS
+SELECT
+    p.passport_number,
+    p.Fname,
+    p.Lname,
+    p.gender,
+    p.nationality,
+    p.passenger_type,
+    p.DOB,
+    pp.phone_number
+FROM
+    passenger p
+LEFT JOIN
+    passenger_phone pp ON p.passport_number = pp.passport_number;
+
+
+This view combines information from the "flight" and "airline" tables to provide details about flights and the airlines operating them.
+2) CREATE VIEW FlightInfo AS
+SELECT
+    f.flight_id,
+    f.departure_city,
+    f.arrival_city,
+    f.departure_date,
+    f.arrival_date,
+    f.numberofpassenger,
+    f.type,
+    a.Name AS airline_name
+FROM
+    flight f
+LEFT JOIN
+    airline a ON f.IATA_code = a.IATA_code;
+
+
+This view combines information from the "boarding" table with details about passengers and flights from the "passenger" and "flight" tables.
+
+3) CREATE VIEW BoardingInfo AS
+SELECT
+    b.boarding_id,
+    b.flight_time,
+    p.passport_number,
+    p.Fname,
+    p.Lname,
+    f.flight_id,
+    f.departure_city,
+    f.arrival_city
+FROM
+    boarding b
+INNER JOIN
+    passenger p ON b.passport_number = p.passport_number
+INNER JOIN
+    flight f ON b.flight_id = f.flight_id;
+
+
+This view combines information from the "airline_location" table with details about airlines from the "airline" table.
+
+4) CREATE VIEW LocationInfo AS
+SELECT
+    al.IATA_code,
+    al.gate_number,
+    al.department,
+    a.Name AS airline_name
+FROM
+    airline_location al
+INNER JOIN
+    airline a ON al.IATA_code = a.IATA_code;
+-----------------------------------------------------------------------------------------------------------------------------------------------
+                                                        procedure
+
+This procedure takes the passenger's passport number as input and retrieves flight information for that passenger.
+
+It uses JOIN operations to connect the "passenger," "boarding," and "flight" tables based on matching passport numbers and flight IDs.
+
+The procedure returns information about the passenger's flights, including their first name, last name, flight ID, departure city, arrival city, departure date, and arrival date.
+
+You can call this procedure with a passport number as an argument to retrieve flight information for a specific passenger.
+
+1) DELIMITER //
+
+CREATE PROCEDURE GetPassengerFlightInfo(
+    IN passportNum CHAR(9)
+)
+BEGIN
+    SELECT
+        p.Fname AS Passenger_FirstName,
+        p.Lname AS Passenger_LastName,
+        f.flight_id AS Flight_ID,
+        f.departure_city AS Departure_City,
+        f.arrival_city AS Arrival_City,
+        f.departure_date AS Departure_Date,
+        f.arrival_date AS Arrival_Date
+    FROM
+        passenger p
+    JOIN
+        boarding b ON p.passport_number = b.passport_number
+    JOIN
+        flight f ON b.flight_id = f.flight_id
+    WHERE
+        p.passport_number = passportNum;
+END //
+
+DELIMITER ;
+
+
+This procedure is designed to insert a new boarding record inro the boarding entity. 
+2)
+
+DELIMITER //
+
+CREATE PROCEDURE InsertBoarding(
+    IN boardingID CHAR(9),
+    IN flightTime DATETIME,
+    IN passportNum CHAR(9),
+    IN flightID CHAR(9),
+    IN boardingStaff VARCHAR(15),
+    IN baggageWeight DECIMAL(10, 2),
+    IN boardingCost DECIMAL(10, 2),
+    IN IATACode CHAR(9)
+)
+BEGIN
+    INSERT INTO boarding (boarding_id, flight_time, passport_number, flight_id, boarding_staff, baggage_weight, cost, IATA_code)
+    VALUES (boardingID, flightTime, passportNum, flightID, boardingStaff, baggageWeight, boardingCost, IATACode);
+END //
+
+DELIMITER ;
+
+
+This takes the passport number as an input parameter and retrieve specific passenger information from the passenger table where the passport number matches the input. 
+
+3)  DELIMITER //
+
+CREATE PROCEDURE GetPassengerInfoByPassport(
+    IN passportNum CHAR(9)
+)
+BEGIN
+    SELECT
+        passport_number,
+        Fname,
+        Lname,
+        gender,
+        nationality,
+        passenger_type,
+        DOB
+    FROM
+        passenger
+    WHERE
+        passport_number = passportNum;
+END //
+
+DELIMITER ;
+
+
+
+
+The "GetFlightsByAirline" procedure retrieves flight information for all flights operated by a specific airline based on the airline's IATA code. It takes airlineIATACode as an input parameter and returns details about the flights operated by the specified airline
+4) DELIMITER //
+
+CREATE PROCEDURE GetFlightsByAirline(
+    IN airlineIATACode CHAR(9)
+)
+BEGIN
+    SELECT
+        f.flight_id AS Flight_ID,
+        f.departure_city AS Departure_City,
+        f.arrival_city AS Arrival_City,
+        f.departure_date AS Departure_Date,
+        f.arrival_date AS Arrival_Date
+    FROM
+        flight f
+    JOIN
+        airline a ON f.IATA_code = a.IATA_code
+    WHERE
+        a.IATA_code = airlineIATACode;
+END //
+
+DELIMITER ;
+
+
+-------------------------------------------------------------------------------------------------------------------------------------------------
+                                                                   Data insertion 
+ 1) INSERT INTO passenger (passport_number, Fname, Lname, gender, nationality, passenger_type, DOB)
+VALUES
+    ('AB1234567', 'John', 'Doe', 'M', 'USA', 'D', '1990-05-15'),
+    ('CD9876543', 'Jane', 'Smith', 'F', 'Canada', 'A', '1985-12-20'),
+    ('EF6543210', 'Michael', 'Johnson', 'M', 'UK', 'D', '1988-08-10'),
+    ('GH7890123', 'Emily', 'Brown', 'F', 'jordan', 'A', '1992-03-25'),
+    ('IJ5678901', 'David', 'Lee', 'M', 'jordan', 'D', '1995-07-03');
+
+
+2)  INSERT INTO airline (IATA_code, flight_id, Name)
+VALUES
+    ('JFK', 1001, 'Jordan Airways'),
+    ('LHR', 1002, 'London Airlines'),
+    ('CDG', 1003, 'Paris Airways'),
+    ('DXB', 1004, 'Dubai Airlines'),
+    ('IST', 1005, 'Istanbul Airways');
+
+
+3) INSERT INTO airline_location (IATA_code, gate_number, department)
+VALUES
+    ('JFK', 1, 'Gate A'),
+    ('LHR', 2, 'Gate B'),
+    ('CDG', 3, 'Gate C'),
+    ('DXB', 4, 'Gate D'),
+    ('IST', 5, 'Gate E');
+ 4) INSERT INTO plane (plane_id, company, model, capacity, classes, gate_number, type, IATA_code)
+VALUES
+    ('P100001', 'Boeing', '747', 400, 'A', 10, 'International', 'JFK'),
+    ('P100002', 'Airbus', 'A320', 200, 'B', 5, 'Domestic', 'LHR'),
+    ('P100003', 'Boeing', '777', 350, 'A', 8, 'International', 'CDG'),
+    ('P100004', 'Airbus', 'A330', 250, 'B', 3, 'Domestic', 'DXB'),
+    ('P100005', 'Boeing', '737', 180, 'A', 6, 'Domestic', 'IST');
+5) INSERT INTO flight (flight_id, departure_city, arrival_city, departure_date, arrival_date, numberofpassenger, type, IATA_code)
+VALUES
+    ('F100001', 'Amman', 'New York', '2023-09-10 08:00:00', '2023-09-10 14:30:00', 150, 'D', 'JFK'),
+    ('F100002', 'Amman', 'London', '2023-09-15 09:30:00', '2023-09-15 17:45:00', 180, 'A', 'LHR'),
+    ('F100003', 'Amman', 'Paris', '2023-09-20 11:15:00', '2023-09-20 19:20:00', 160, 'D', 'CDG'),
+    ('F100004', 'dubai', 'amman', '2023-09-25 14:45:00', '2023-09-25 21:10:00', 200, 'A', 'DXB'),
+    ('F100005', 'Istanbul', 'amman', '2023-09-30 16:20:00', '2023-09-30 23:40:00', 170, 'D', 'IST');
+
+
+6) INSERT INTO passenger_phone (passport_number, phone_number)
+VALUES
+    ('AB1234567', '123-456-7890'),
+    ('CD9876543', '987-654-3210'),
+    ('EF6543210', '555-123-4567'),
+    ('GH7890123', '777-888-9999'),
+    ('IJ5678901', '111-222-3333');
+7) INSERT INTO boarding (boarding_id, flight_time, passport_number, flight_id, boarding_staff, baggage_weight, cost, IATA_code)
+VALUES
+    ('B100001', '2023-09-10 07:30:00', 'AB1234567', 'F100001', 'John', 23.5, 100.00, 'JFK'),
+    ('B100002', '2023-09-15 08:45:00', 'CD9876543', 'F100002', 'Jane', 18.0, 85.50, 'LHR'),
+    ('B100003', '2023-09-20 10:55:00', 'EF6543210', 'F100003', 'Michael', 20.3, 95.25, 'CDG'),
+    ('B100004', '2023-09-25 14:15:00', 'GH7890123', 'F100004', 'Emily', 30.0, 120.75, 'DXB'),
+    ('B100005', '2023-09-30 15:45:00', 'IJ5678901', 'F100005', 'David', 25.5, 110.50, 'IST');
+8) INSERT INTO airline_email (IATA_code, email)
+VALUES
+    ('JFK', 'info@jordanairways.com'),
+    ('LHR', 'info@londonairlines.com'),
+    ('CDG', 'info@parisairways.com'),
+    ('DXB', 'info@dubaiairlines.com'),
+    ('IST', 'info@istanbulairways.com');
+
+----------------------------------------------------------------------------------------------------------------------------------
+                                                                    security
+make users 
+1) CREATE user passenger_user1@localhost IDENTIFIED by '1234';
+CREATE user flight_manager@localhost IDENTIFIED by '1234';
+CREATE user ariline_manager@localhost IDENTIFIED by '';
+CREATE user staff_airport@localhost IDENTIFIED by '';
+CREATE user airport_manager@localhost IDENTIFIED by '';
+
+
+give priviliges to passenger
+2) GRANT SELECT ON airport2.passenger TO 'passenger_user1'@'localhost';
+GRANT INSERT ON airport2.boarding TO 'passenger_user1'@'localhost';
+GRANT SELECT ON airport2.boarding TO 'passenger_user1'@'localhost';
+GRANT UPDATE ON airport2.boarding TO 'passenger_user1'@'localhost';
+
+give priviliges to flight manager
+2)  GRANT UPDATE ON airport2.flight TO 'flight_manager'@'localhost';
+    GRANT INSERT ON airport2.boarding TO 'flight_manager'@'localhost';
+    GRANT SELECT ON airport2.boarding TO 'flight_manager'@'localhost';
+    GRANT UPDATE ON airport2.boarding TO 'flight_manager'@'localhost';
+    GRANT DELETE ON airport2.boarding TO 'flight_manager'@'localhost';
+
+give privilges to 
+3)  GRANT SELECT ON airport2.boarding TO 'staff_airport'@'localhost';
+GRANT SELECT ON airport2.flight TO 'staff_airport'@'localhost';
+GRANT SELECT ON airport2.passenger TO 'staff_airport'@'localhost';
+GRANT UPDATE ON airport2.boarding TO 'staff_airport'@'localhost';
+GRANT INSERT ON airport2.boarding TO 'staff_airport'@'localhost';
+
+
+give privileges to manager airport
+
+4) GRANT SELECT,INSERT	,UPDATE,DELETE ON airport2.flight TO 'airport_manager'@'localhost';
+GRANT SELECT,UPDATE ON airport2.boarding TO 'airport_manager'@'localhost';
+GRANT SELECT ON airport2.BoardingInfo  TO 'airport_manager'@'localhost';
+GRANT SELECT ON airport2.LocationInfo  TO 'airport_manager'@'localhost';
+GRANT SELECT ON airport2.FlightInfo  TO 'airport_manager'@'localhost';
+
+---------------------------------------------------------------------------------------------------------------------------
+                                                               testing 
+
+1) primary key first table 
+INSERT INTO passenger (passport_number, Fname, Lname, gender, nationality, passenger_type, DOB)
+VALUES ('AB1234567', 'ahmed', 'mohammad', 'M', 'jordan', 'D', '1990-01-01');
+
+
+INSERT INTO passenger (passport_number, Fname, Lname, gender, nationality, passenger_type, DOB)
+VALUES ('AB1234567', 'fahed', 'murad', 'F', 'KSA', 'A', '1995-05-05');
+
+2) primary key for second table 
+-- Attempt to insert a flight with a duplicate flight ID
+INSERT INTO flight (flight_id, departure_city, arrival_city, departure_date, arrival_date, numberofpassenger, type, IATA_code)
+VALUES ('F100001', 'Amman', 'New York', '2023-09-10 08:00:00', '2023-09-10 14:30:00', 150, 'D', 'JFK');
+
+3) foreign key 
+-- Attempt to insert a boarding record with an invalid IATA_code
+INSERT INTO boarding (boarding_id, flight_time, passport_number, flight_id, boarding_staff, baggage_weight, cost, IATA_code)
+VALUES ('B100006', '2023-10-05 09:30:00', 'AB1234567', 'F100006', 'Alice', 25.0, 110.00, 'XYZ');
